@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from torchvision.transforms import v2
 
-from spp import build_model
+from spp import build_model_spp
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -36,16 +36,12 @@ def get_dataloaders(data_dir, batch_size, num_workers):
     train_tf = v2.Compose([
         v2.RandomResizedCrop(224),
         v2.RandomHorizontalFlip(),
-        v2.ToImage(),
-        v2.ToDtype(torch.float32, scale=True),
+        v2.ToTensor(),
         normalize
     ])
 
     val_tf = v2.Compose([
-        v2.Resize(256),
-        v2.CenterCrop(224),
-        v2.ToImage(),
-        v2.ToDtype(torch.float32, scale=True),
+        v2.ToTensor(),
         normalize
     ])
 
@@ -140,7 +136,7 @@ def main():
 
     train_loader, validation_loader, number_of_classes = get_dataloaders(data_dir=args.data_dir, batch_size=args.batch_size, num_workers=args.num_workers)
 
-    model = build_model(num_classes=number_of_classes).to(device)
+    model = build_model_spp(num_classes=number_of_classes).to(device)
 
     # Cross-entropy loss for supervised training
     criterion = nn.CrossEntropyLoss()

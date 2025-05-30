@@ -20,7 +20,6 @@ class SpatialPyramidPooling(nn.Module):
                 tensor = F.adaptive_max_pool2d(x, output_size=(L, L))
             else:
                 tensor = F.adaptive_avg_pool2d(x, output_size=(L, L))
-
             # flatten each pooled feature-map
             outputs.append(tensor.view(bs, -1))
 
@@ -37,9 +36,9 @@ class ResNet18_SPP(nn.Module):
     def __init__(self, num_classes, spp_levels=[1, 2, 4], pretrained=False, pool_type='max', fc_dim=1024, dropout=0.5):
         super().__init__()
         # Load ResNet18 backbone, remove avgpool & fc
-        backbone = resnet18(pretrained=pretrained)
-        self.features = nn.Sequential(*list(backbone.children())[:-2])
-        feat_dim = backbone.fc.in_features
+        encoder = resnet18(pretrained=pretrained)
+        self.features = nn.Sequential(*list(encoder.children())[:-2])
+        feat_dim = encoder.fc.in_features
 
         # SPP module
         self.spp = SpatialPyramidPooling(levels=spp_levels, pool_type=pool_type)
@@ -50,11 +49,12 @@ class ResNet18_SPP(nn.Module):
         self.fc6 = nn.Linear(spp_dim, fc_dim)
         self.relu6 = nn.ReLU(inplace=True)
         self.drop6 = nn.Dropout(p=dropout)
-
+        self.norm6 = nn.LayerNorm(spp_dim)
         self.fc7 = nn.Linear(fc_dim, fc_dim)
         self.relu7 = nn.ReLU(inplace=True)
         self.drop7 = nn.Dropout(p=dropout)
-
+        
+        self.norm7 = nn.LayerNorm(fc_dim)
         # Final classification layer
         self.classifier = nn.Linear(fc_dim, num_classes)
 
@@ -66,17 +66,19 @@ class ResNet18_SPP(nn.Module):
     def forward(self, x):
         x = self.features(x)
         x = self.spp(x)
+        x = self.norm6(x)
         x = self.drop6(self.relu6(self.fc6(x)))
         x = self.drop7(self.relu7(self.fc7(x)))
+        x = self.norm7(x)
         x = self.classifier(x)
         return x
 
 
-def build_model(num_classes, spp_levels=[1, 2, 4], pretrained=False, pool_type='max', fc_dim=1024, dropout=0.5):
+def build_model_spp(num_classes, spp_levels=[1, 2, 4], pretrained=False, pool_type='max', fc_dim=128, dropout=0.3):
     """
     Utility to build the SPP-ResNet18 model for scene classification.
     """
-    return ResNet18_SPP(
+    model = ResNet18_SPP(
         num_classes=num_classes,
         spp_levels=spp_levels,
         pretrained=pretrained,
@@ -84,3 +86,5 @@ def build_model(num_classes, spp_levels=[1, 2, 4], pretrained=False, pool_type='
         fc_dim=fc_dim,
         dropout=dropout
     )
+
+    return model
