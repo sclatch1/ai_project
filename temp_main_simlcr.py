@@ -43,8 +43,6 @@ def parse_args():
 
 
 
-
-
 def random_crop():
     """
     Random crop and resize to 224x224 We use standard Inception-style random cropping (Szegedy et al., 2015). 
@@ -121,7 +119,6 @@ def train(model, loader, criterion, optimizer, method):
         total_loss += loss.item() * batch_size
 
     return total_loss / len(loader.dataset)
-
 
 
 

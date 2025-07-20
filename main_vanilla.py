@@ -29,16 +29,21 @@ def parse_args():
     return parser.parse_args()
 
 
+
+
+
 def get_dataloaders(data_dir, batch_size, num_workers):
     normalize = v2.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
-
+    
+    # data augmentation to reduce overfitting
     train_tf = v2.Compose([
-        v2.RandomResizedCrop(224),
         v2.RandomHorizontalFlip(),
+        v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+        v2.RandomRotation(degrees=10),
         v2.ToTensor(),
-        normalize
-    ])
+        normalize,
+        ])
 
     val_tf = v2.Compose([
         v2.ToTensor(),
@@ -48,20 +53,20 @@ def get_dataloaders(data_dir, batch_size, num_workers):
     train_set = datasets.ImageFolder(os.path.join(data_dir, 'train'), transform=train_tf)
     val_set = datasets.ImageFolder(os.path.join(data_dir, 'val'), transform=val_tf)
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    train_loader = DataLoader(train_set, batch_size=1, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_set, batch_size=1, shuffle=False, num_workers=num_workers)
 
     return train_loader, val_loader, len(train_set.classes)
 
 
-"""
+
 def build_model(num_classes):
-    # Initialize ResNet-18 from scratch (no pretrained weights)
+    # Initialize ResNet-18. This is for benchmarking resnet18 + spp
     model = models.resnet18(pretrained=False)
     in_features = model.fc.in_features
     model.fc = nn.Linear(in_features, num_classes)
     return model
-"""
+
 
 
 
@@ -90,7 +95,7 @@ def train(model, train_loader, criterion, optimizer):
         optimizer.step()
         
         total_loss += loss.item()
-        preds = torch.sum(torch.argmax(outputs, dim=1))
+        preds = torch.argmax(outputs, dim=1)
         num_correct += torch.sum(preds == labels.data).item()
         num_images += inputs.size(0)
         
@@ -139,11 +144,15 @@ def main():
     model = build_model_spp(num_classes=number_of_classes).to(device)
 
     # Cross-entropy loss for supervised training
-    criterion = nn.CrossEntropyLoss()
-    # SGD optimizer initialized for from-scratch training
-    optimizer = optim.SGD(model.parameters(), lr=args.lr,
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+
+    if (args.optimizer == "sdg"):
+        optimizer = optim.SGD(model.parameters(), lr=args.lr,
                           momentum=args.momentum, weight_decay=args.weight_decay)
-    
+    else:
+        optimizer = optim.Adam(model.parameters(), lr=args.lr,
+                              weight_decay=args.weight_decay)
+
     
     # Step LR scheduler: reduce lr every 50 epochs
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
@@ -166,12 +175,12 @@ def main():
               f'Train Loss: {train_loss:.4f} Acc: {train_acc:.4f} | '  \
               f'Val Loss: {val_loss:.4f} Acc: {val_acc:.4f}')
 
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))  
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))  
 
     # First plot: Training & Validation Loss
     axes[0].plot(np.arange(args.epochs), train_loss_list, color='blue', label='Train Loss')
     axes[0].plot(np.arange(args.epochs), val_loss_list, color='red', label='Validation Loss')
-    axes[0].set_title('Train and Validation Loss (LR: {:.0e})'.format(LR))
+    axes[0].set_title('Train and Validation Loss (LR: {:.0e})'.format(args.lr))
     axes[0].set_xlabel('Epoch')
     axes[0].set_ylabel('Loss')
     axes[0].legend()
@@ -187,11 +196,11 @@ def main():
     axes[1].grid(True)
     
     # Save the figure
-    plt.savefig(f'train_val_loss_accuracy_{LR}_{description}.png')
+    plt.savefig(f'train_val_loss_accuracy_{args.lr}.png')
     
     # Show the plots
     plt.show()
 
-
+    plt.close()
 if __name__ == "__main__":
     main()

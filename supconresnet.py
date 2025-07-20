@@ -1,10 +1,9 @@
 import torch.nn as nn
 import torchvision
-
-
-class SimCLR(nn.Module):
+import torch.nn.functional as F
+class SupConResNet(nn.Module):
     def __init__(self, encoder, projection_dim, n_features):
-        super(SimCLR, self).__init__()
+        super(SupConResNet, self).__init__()
 
         self.encoder = encoder
         self.n_features = n_features
@@ -25,4 +24,10 @@ class SimCLR(nn.Module):
 
         z_i = self.projector(h_i)
         z_j = self.projector(h_j)
-        return h_i, h_j, z_i, z_j
+        z_i = F.normalize(z_i, dim=1)
+        z_j = F.normalize(z_j, dim=1)
+        return z_i, z_j
+    
+
+def build_supconresnet(encoder, projection_dim, n_features):
+    return SupConResNet(encoder, projection_dim, n_features)

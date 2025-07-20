@@ -1,7 +1,26 @@
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
+from util import misc
 
+def stablize_logits(logits):
+    logits_max, _ = torch.max(logits, dim=-1, keepdim=True)
+    logits = logits - logits_max.detach()
+    return logits
 
 @torch.no_grad()
 def concat_all_gather(tensor):
@@ -70,6 +89,9 @@ class SupConLoss(nn.Module):
         # compute logits
         logits = torch.matmul(feats, all_feats.T) / self.temperature
         logits = logits - (1 - self.logits_mask) * 1e9
+
+        # optional: minus the largest logit to stablize logits
+        logits = stablize_logits(logits)
 
         # compute ground-truth distribution
         p = mask / mask.sum(1, keepdim=True).clamp(min=1.0)

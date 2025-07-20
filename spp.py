@@ -49,11 +49,13 @@ class ResNet18_SPP(nn.Module):
         self.fc6 = nn.Linear(spp_dim, fc_dim)
         self.relu6 = nn.ReLU(inplace=True)
         self.drop6 = nn.Dropout(p=dropout)
+        # applying normalisation to counter explosion of features dimension
         self.norm6 = nn.LayerNorm(spp_dim)
+        
+        
         self.fc7 = nn.Linear(fc_dim, fc_dim)
         self.relu7 = nn.ReLU(inplace=True)
         self.drop7 = nn.Dropout(p=dropout)
-        
         self.norm7 = nn.LayerNorm(fc_dim)
         # Final classification layer
         self.classifier = nn.Linear(fc_dim, num_classes)
@@ -63,21 +65,24 @@ class ResNet18_SPP(nn.Module):
             nn.init.normal_(m.weight, mean=0, std=0.01)
             nn.init.constant_(m.bias, 0)
 
-    def forward(self, x):
+    def forward(self, x, return_embedding=False):
+        """
+        x: input tensor [B,C,H,W]
+        return_embedding + fc7 features
+        """
         x = self.features(x)
         x = self.spp(x)
         x = self.norm6(x)
         x = self.drop6(self.relu6(self.fc6(x)))
-        x = self.drop7(self.relu7(self.fc7(x)))
-        x = self.norm7(x)
+        embedding = self.drop7(self.relu7(self.fc7(x)))
+        x = self.norm7(embedding)
         x = self.classifier(x)
+        if return_embedding:
+            return x, embedding
         return x
 
 
-def build_model_spp(num_classes, spp_levels=[1, 2, 4], pretrained=False, pool_type='max', fc_dim=128, dropout=0.3):
-    """
-    Utility to build the SPP-ResNet18 model for scene classification.
-    """
+def build_model_spp(num_classes, spp_levels=[1, 2, 4], pretrained=False, pool_type='max', fc_dim=1024, dropout=0.4):
     model = ResNet18_SPP(
         num_classes=num_classes,
         spp_levels=spp_levels,
